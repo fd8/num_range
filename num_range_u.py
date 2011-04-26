@@ -20,6 +20,13 @@
 
 '''
 
+'''
+Ошибки:
+- неправильно формируется список коротких диапазонов, поскольку при печати видно, что в один список
+  добавляется много диапазонов
+'''
+
+
 import sqlite3
 
 #-------------- FUNCTIONS ---------------------
@@ -113,16 +120,17 @@ def put_ranges_intoDB(ranges):
     cur.execute(sql)
     for range in ranges:
         s = unicode(range[2], 'cp1251')
+        #a = s.encode('cp1251')
+        #print s, a
         sql = '''
               insert into ranges values
               ({r_start}, {r_end},
-              '''.format(r_start=range[0], r_end=range[1], r_region=s)#unicode(range[2], 'cp1251'))
+              '''.format(r_start=range[0], r_end=range[1])#unicode(range[2], 'cp1251'))
         sql += '"' + s + '")'
         cur.execute(sql)
     return conn, cur 
 
 def is10in_list(chr_list):
-    #print chr_list
     num_list = str_tup_list2int_list(chr_list)
     for i in range(10):
         if i not in num_list:
@@ -131,7 +139,6 @@ def is10in_list(chr_list):
 
 def append_ranges(ranges, range_base, range_rests, region):
     ranges.append([])
-    #print range_base, range_rests, region
     r_rest = range_rests
     r_rest = get_unique_sort(r_rest)
     for item in r_rest:
@@ -139,7 +146,6 @@ def append_ranges(ranges, range_base, range_rests, region):
         ranges[n].append(add_symbols(range_base+item+'0'))
         ranges[n].append(add_symbols(range_base+item+'9'))
         ranges[n].append(region)
-        #print range_base, item, '-----------',ranges[n][len(ranges[n])-1]
     return ranges
     
 def get_unique_sort(list):
@@ -174,7 +180,6 @@ def get_short_ranges(full_ranges):
               where substr(range_start, 1, 4) like "{r_4}"
               '''.format(r_4=range4)
         cur2 = conn.cursor()
-        #print sql
         cur2.execute(sql)
         cur2_fetch = cur2.fetchall()
         if is10in_list(cur2_fetch) is True:
@@ -183,25 +188,34 @@ def get_short_ranges(full_ranges):
             short_ranges[n].append(add_symbols(range4+'0'))
             short_ranges[n].append(add_symbols(range4+'9'))
             short_ranges[n].append(line[len(line)-1])
-            #print unicode(line[len(line)-1])
         else: 
             range_rests = fetch2list(cur2_fetch)
             short_ranges = append_ranges(short_ranges, range4, range_rests, line[len(line)-1])
     conn.close()
     return short_ranges
 
+def to_cp1251(list):
+    res_list = []
+    for i in range(len(list)):
+        if isinstance(list[i], unicode):
+            list[i] = list[i].encode('cp1251')
+        res_list.append(list[i])
+    return res_list
+    
 
-def write_out_ranges(writer, ranges, flag = 0):
+def write_out_ranges(writer, ranges, DBflag = 0):
     header = ['Код диапазона', 'Начало диапазона', 'Конец диапазона', 'Емкость', 'Регион']
     writer.writerow(header)
     for list in ranges:
-        #print list
         list.insert(0, long(str(list[0])[0:3])) # код диапазона
         list.insert(3, list[2]-list[1]+1) # емкость
-        if flag == 1: 
-            for i in range(len(list)):
-                print i, '------', list[i]
-        writer.writerow(list[0:len(list)-2])
+        if DBflag == 1: 
+            list = to_cp1251(list)
+        try:
+            writer.writerow(list)
+        except UnicodeEncodeError:
+            print "Can't encode chars for ", DBflag, list
+            exit()
 
     
 #----------- FUNCTIONS END --------------------
