@@ -85,11 +85,16 @@ def str2num_list(str, str_delimiter, filename, i):
         num_list.append(x)
     return num_list
     
-def str_tup_list2int_list(str_tup_list):
+def str_list2int_list(str_list):
     int_list = []
-    for tup in str_tup_list:
-        for chr in tup:
-            int_list.append(int(chr))
+    for str_item in str_list:
+        if isinstance(str_item, str) or isinstance(str_item, unicode):
+            str_item = int(str_item)
+        elif not isinstance(str_item, int):
+            e = "The value list have to contain from strs or ints only! " + \
+                str(type(str_item)) + " involves."
+            raise ValueError, e
+        int_list.append(str_item)
     return int_list
     
 def get_ranges(ranges, file):   
@@ -131,49 +136,61 @@ def put_ranges_intoDB(ranges):
     return conn, cur 
 
 def is10in_list(chr_list):
-    num_list = str_tup_list2int_list(chr_list)
+    '''
+    на входе список из цифр,
+    чтобы проверить, все ли цифры от 0 до 10 
+    у нем представлены.
+    '''
+    num_list = str_list2int_list(chr_list)
     for i in range(10):
         if i not in num_list:
             return False
     return True
 
-def append_ranges(ranges, range_base, range_rests, region):
-    ranges.append([])
-    r_rest = range_rests
-    r_rest = get_unique_sort(r_rest)
-    for item in r_rest:
-        n = len(ranges) - 1
-        ranges[n].append(add_symbols(range_base+item+'0'))
-        ranges[n].append(add_symbols(range_base+item+'9'))
-        ranges[n].append(region)
+def append_ranges(ranges, range_base, range_rests, region = ''):
+    for item in range_rests:
+        range = []
+        range.append(add_symbols(range_base+item+'0'))
+        range.append(add_symbols(range_base+item+'9'))
+        range.append(region)
+        ranges.append(range)
     return ranges
+
     
 def get_unique_sort(list):
+    '''
+    На входе - список значений, из которых 
+    получаем сортированый список.
+    '''
     l_set = set()
     for item in list:
         l_set.add(item)
     list = sorted(l_set)
     return list
     
-def fetch2list(fetch_result):
+def tup2list(tup_list):
+    '''
+    на входе список из одинарных тьюплов 
+    (как результат работы fetchall),
+    чтобы на выходе получить список из значений,
+    записанных в tuple
+    '''
     list = []
-    for tup in fetch_result:
+    for tup in tup_list:
         list.append(tup[0])
     return list
-    
     
 def get_short_ranges(full_ranges):
     conn, cur = put_ranges_intoDB(num_ranges)
     sql = '''
-          select distinct substr(range_start, 1, 4), region
+          select distinct substr(range_start, 1, 4)
           from ranges
           ''' 
     cur.execute(sql)
     short_ranges = []
     i = 0
-    for line in cur.fetchall():
-        line = get_unique_sort(line)
-        range4 = line[0]
+    lines = get_unique_sort(tup2list(cur.fetchall())) # lines - это список, содержащий диапазоны из 4 символов.
+    for range4 in lines:
         sql = '''
               select substr(range_start, 5, 1) 
               from ranges
@@ -181,16 +198,20 @@ def get_short_ranges(full_ranges):
               '''.format(r_4=range4)
         cur2 = conn.cursor()
         cur2.execute(sql)
-        cur2_fetch = cur2.fetchall()
-        if is10in_list(cur2_fetch) is True:
-            short_ranges.append([])
-            n = len(short_ranges) - 1
-            short_ranges[n].append(add_symbols(range4+'0'))
-            short_ranges[n].append(add_symbols(range4+'9'))
-            short_ranges[n].append(line[len(line)-1])
+        print sql
+        ranges4 = get_unique_sort(tup2list(cur2.fetchall()))
+        print ranges4
+        if is10in_list(ranges4) is True:
+            short_range = []
+            short_range.append(add_symbols(range4+'0'))
+            short_range.append(add_symbols(range4+'9'))
+            #short_ranges[n].append(get_region(region))
+            short_range.append('')
+            short_ranges.append(short_range)
         else: 
-            range_rests = fetch2list(cur2_fetch)
-            short_ranges = append_ranges(short_ranges, range4, range_rests, line[len(line)-1])
+            range_rests = ranges4 # получаем список пятых цифр
+            #region = line[len(line)-1]
+            short_ranges = append_ranges(short_ranges, range4, range_rests)#, region)
     conn.close()
     return short_ranges
 
